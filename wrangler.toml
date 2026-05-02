@@ -1,0 +1,8 @@
+name = "github-badge-api"
+main = "worker.js"
+compatibility_date = "2026-05-02"
+
+# KV binding (IMPORTANT)
+[[kv_namespaces]]
+binding = "GITHUBBADGE"
+id = "YOUR_KV_NAMESPACE_ID"
