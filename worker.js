@@ -1,106 +1,122 @@
-# GitHub View Counter
+export default {
+  async fetch(request, env) {
 
-![Repo Views](https://githubbadge.mario22623.workers.dev/jaixmario/view-counter?label=repo%20views&color=%23c70000&labelColor=%23000000&textColor=%23ffffff&countColor=%23ffffff&fontSize=11&format=short)
+    const url = new URL(request.url)
 
-A simple Cloudflare Worker that generates a dynamic SVG view counter badge for GitHub profiles or repositories.
+    // ✅ VERIFY ENDPOINT (put BEFORE using parts)
+    if (url.pathname === "/verify") {
+      return new Response(JSON.stringify({
+        name: "github-badge-api",
+        type: "counter",
+        version: "1.0",
+        endpoints: [
+          "/USERNAME",
+          "/USERNAME/REPO"
+        ],
+        status: "ok"
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Headers": "*"
+        }
+      })
+    }
 
-## Features
+    const parts = url.pathname.split("/").filter(Boolean)
 
-- Count views per GitHub username or GitHub repo
-- Generate an SVG badge on every request
-- Customizable badge label, colors, font size, and number format
-- Easy Cloudflare Workers + KV setup
+    if (parts.length < 1) {
+      return new Response("Usage: /USERNAME or /USERNAME/REPO", { status: 400 })
+    }
 
-## How it works
+    const username = parts[0]
+    const repo = parts[1] || null
 
-The worker handles requests to:
+    // 🎛️ Params
+    const labelParam = url.searchParams.get("label")
+    const color = url.searchParams.get("color") || "#c60000"
+    const labelColor = url.searchParams.get("labelColor") || "#555"
+    const format = url.searchParams.get("format") || "full"
 
-- `/USERNAME` — counts profile views for the given GitHub username
-- `/USERNAME/REPO` — counts repo views for the given repository
+    const textColor = url.searchParams.get("textColor") || "#ffffff"
+    const countColor = url.searchParams.get("countColor") || textColor
+    const fontSize = parseInt(url.searchParams.get("fontSize") || "11")
 
-Each request increments a counter in Cloudflare KV and returns an SVG badge.
+    const isProfile = !repo
+    const label = labelParam || (isProfile ? "profile views" : "repo views")
 
-## Deploy to Cloudflare
+    const key = isProfile
+      ? `views:${username}`
+      : `views:${username}/${repo}`
 
-1. Log in to your Cloudflare account at [cloudflare.com](https://cloudflare.com).
+    // 🔢 Count
+    let count = await env.GITHUBBADGE.get(key)
+    count = parseInt(count || 0) + 1
+    await env.GITHUBBADGE.put(key, count)
 
-2. From the left sidebar, search for "Workers & Pages" and select it.
+    // 🔢 Format
+    function formatNumber(num) {
+      if (format !== "short") return num.toString()
 
-3. Click "Create application".
+      if (num >= 1e9) return (num / 1e9).toFixed(1) + "B"
+      if (num >= 1e6) return (num / 1e6).toFixed(1) + "M"
+      if (num >= 1e3) return (num / 1e3).toFixed(1) + "K"
+      return num.toString()
+    }
 
-4. Choose "Continue with GitHub login" if required.
+    const countText = formatNumber(count)
 
-5. Select "Clone a public repository via Git URL".
+    // 📏 Dynamic width
+    const charWidth = fontSize * 0.6
+    const padding = fontSize
 
-6. Enter the URL: `https://github.com/jaixmario/view-counter`
+    const leftWidth = Math.ceil(label.length * charWidth) + padding
+    const rightWidth = Math.ceil(countText.length * charWidth) + padding
 
-7. Click "Next" to create the repo.
+    const totalWidth = leftWidth + rightWidth
 
-8. If you want a custom subdomain, replace the project name with your preferred name.
+    const leftCenter = leftWidth / 2
+    const rightCenter = leftWidth + (rightWidth / 2)
 
-9. In the "Select KV namespace" section, select "Create new" and enter `GITHUBBADGE` as the namespace name.
+    const textY = 14 + (fontSize - 11)
 
-10. Click "Deploy".
+    // SVG
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20">
+  <linearGradient id="b" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
 
-11. Wait about 1 minute, then check the logs for your deployment URL, which will look something like `yourname.yourusername.workers.dev`.
+  <mask id="a">
+    <rect width="${totalWidth}" height="20" rx="3" fill="#fff"/>
+  </mask>
 
-## Usage
+  <g mask="url(#a)">
+    <rect width="${leftWidth}" height="20" fill="${labelColor}"/>
+    <rect x="${leftWidth}" width="${rightWidth}" height="20" fill="${color}"/>
+    <rect width="${totalWidth}" height="20" fill="url(#b)"/>
+  </g>
 
-### Profile view counter
+  <g text-anchor="middle"
+     font-family="DejaVu Sans,Verdana,Geneva,sans-serif"
+     font-size="${fontSize}">
 
-```text
-https://your-worker.example.com/USERNAME
-```
+    <text x="${leftCenter}" y="${textY+1}" fill="#000" fill-opacity=".3">${label}</text>
+    <text x="${leftCenter}" y="${textY}" fill="${textColor}">${label}</text>
 
-### Repo view counter
+    <text x="${rightCenter}" y="${textY+1}" fill="#000" fill-opacity=".3">${countText}</text>
+    <text x="${rightCenter}" y="${textY}" fill="${countColor}">${countText}</text>
+  </g>
+</svg>
+`
 
-```text
-https://your-worker.example.com/USERNAME/REPO
-```
-
-### Verify endpoint
-
-```text
-https://your-worker.example.com/verify
-```
-
-Returns JSON metadata about the service.
-
-## Customization options
-
-You can customize the badge using query string parameters:
-
-- `label` — override the default label text
-- `color` — badge right section background color (default `#c60000`)
-- `labelColor` — badge left section background color (default `#555`)
-- `textColor` — label text color (default `#ffffff`)
-- `countColor` — count text color (defaults to `textColor`)
-- `fontSize` — font size in pixels (default `11`)
-- `format` — number format: `full` or `short`
-
-### Example custom badge
-
-```text
-https://your-worker.example.com/USERNAME/REPO?label=repo%20views&color=%230068ff&labelColor=%23222&textColor=%23fff&countColor=%23ffeb3b&fontSize=12&format=short
-```
-
-## Example badge URLs
-
-- Profile counter: `https://your-worker.example.com/octocat`
-- Repository counter: `https://your-worker.example.com/octocat/hello-world`
-- Short format: `...?format=short`
-- Custom label: `...?label=profile%20hits`
-
-## Notes
-
-- The worker uses Cloudflare KV (`GITHUBBADGE`) for persistent counts.
-- Each badge request increases the counter by one.
-- SVG is returned with `Content-Type: image/svg+xml` and `Cache-Control: no-cache`.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-[MIT](https://opensource.org/licenses/MIT)
+    return new Response(svg, {
+      headers: {
+        "Content-Type": "image/svg+xml",
+        "Cache-Control": "no-cache"
+      }
+    })
+  }
+}
