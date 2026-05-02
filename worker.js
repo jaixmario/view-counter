@@ -11,26 +11,29 @@ export default {
     const username = parts[0]
     const repo = parts[1] || null
 
-    // Query params
+    // 🎛️ Params
     const labelParam = url.searchParams.get("label")
     const color = url.searchParams.get("color") || "#c60000"
     const labelColor = url.searchParams.get("labelColor") || "#555"
     const format = url.searchParams.get("format") || "full"
 
-    const isProfile = !repo
+    const textColor = url.searchParams.get("textColor") || "#ffffff"
+    const countColor = url.searchParams.get("countColor") || textColor
+    const fontSize = parseInt(url.searchParams.get("fontSize") || "11")
 
-    let label = labelParam || (isProfile ? "profile views" : "repo views")
+    const isProfile = !repo
+    const label = labelParam || (isProfile ? "profile views" : "repo views")
 
     const key = isProfile
       ? `views:${username}`
       : `views:${username}/${repo}`
 
-    // Get count
+    // 🔢 Count
     let count = await env.GITHUBBADGE.get(key)
     count = parseInt(count || 0) + 1
     await env.GITHUBBADGE.put(key, count)
 
-    // 🔢 FORMAT FUNCTION
+    // 🔢 Format
     function formatNumber(num) {
       if (format !== "short") return num.toString()
 
@@ -42,9 +45,9 @@ export default {
 
     const countText = formatNumber(count)
 
-    // 🔥 AUTO WIDTH
-    const charWidth = 6.5
-    const padding = 10
+    // 📏 Dynamic width (depends on font size too)
+    const charWidth = fontSize * 0.6
+    const padding = fontSize
 
     const leftWidth = Math.ceil(label.length * charWidth) + padding
     const rightWidth = Math.ceil(countText.length * charWidth) + padding
@@ -54,22 +57,15 @@ export default {
     const leftCenter = leftWidth / 2
     const rightCenter = leftWidth + (rightWidth / 2)
 
-    // ✨ STYLE
-    const gradient = `
-      <linearGradient id="b" x2="0" y2="100%">
-        <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
-        <stop offset="1" stop-opacity=".1"/>
-      </linearGradient>
-    `
-
-    const overlay = `
-      <rect width="${totalWidth}" height="20" fill="url(#b)"/>
-    `
+    const textY = 14 + (fontSize - 11) // adjust vertical alignment
 
     // SVG
     const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20">
-  ${gradient}
+  <linearGradient id="b" x2="0" y2="100%">
+    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+    <stop offset="1" stop-opacity=".1"/>
+  </linearGradient>
 
   <mask id="a">
     <rect width="${totalWidth}" height="20" rx="3" fill="#fff"/>
@@ -78,20 +74,20 @@ export default {
   <g mask="url(#a)">
     <rect width="${leftWidth}" height="20" fill="${labelColor}"/>
     <rect x="${leftWidth}" width="${rightWidth}" height="20" fill="${color}"/>
-    ${overlay}
+    <rect width="${totalWidth}" height="20" fill="url(#b)"/>
   </g>
 
-  <g fill="#fff" text-anchor="middle"
+  <g text-anchor="middle"
      font-family="DejaVu Sans,Verdana,Geneva,sans-serif"
-     font-size="11">
+     font-size="${fontSize}">
 
     <!-- Label -->
-    <text x="${leftCenter}" y="15" fill="#010101" fill-opacity=".3">${label}</text>
-    <text x="${leftCenter}" y="14">${label}</text>
+    <text x="${leftCenter}" y="${textY+1}" fill="#000" fill-opacity=".3">${label}</text>
+    <text x="${leftCenter}" y="${textY}" fill="${textColor}">${label}</text>
 
     <!-- Count -->
-    <text x="${rightCenter}" y="15" fill="#010101" fill-opacity=".3">${countText}</text>
-    <text x="${rightCenter}" y="14">${countText}</text>
+    <text x="${rightCenter}" y="${textY+1}" fill="#000" fill-opacity=".3">${countText}</text>
+    <text x="${rightCenter}" y="${textY}" fill="${countColor}">${countText}</text>
   </g>
 </svg>
 `
