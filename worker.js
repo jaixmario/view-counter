@@ -11,9 +11,16 @@ export default {
     const username = parts[0]
     const repo = parts[1] || null
 
+    // Query params
+    const labelParam = url.searchParams.get("label")
+    const color = url.searchParams.get("color") || "#c60000"
+    const labelColor = url.searchParams.get("labelColor") || "#555"
+    const format = url.searchParams.get("format") || "full"
+
     const isProfile = !repo
 
-    const label = isProfile ? "profile views" : "repo views"
+    let label = labelParam || (isProfile ? "profile views" : "repo views")
+
     const key = isProfile
       ? `views:${username}`
       : `views:${username}/${repo}`
@@ -21,27 +28,25 @@ export default {
     // Get count
     let count = await env.GITHUBBADGE.get(key)
     count = parseInt(count || 0) + 1
-
     await env.GITHUBBADGE.put(key, count)
 
-    // Telegram
-    await fetch(`https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: env.CHAT_ID,
-        text: `👀 ${label}\nUser: ${username}\nRepo: ${repo || "N/A"}\nViews: ${count}`
-      })
-    })
+    // 🔢 FORMAT FUNCTION
+    function formatNumber(num) {
+      if (format !== "short") return num.toString()
 
-    // 🔥 AUTO WIDTH SYSTEM
-    const text = label
-    const countText = count.toString()
+      if (num >= 1e9) return (num / 1e9).toFixed(1) + "B"
+      if (num >= 1e6) return (num / 1e6).toFixed(1) + "M"
+      if (num >= 1e3) return (num / 1e3).toFixed(1) + "K"
+      return num.toString()
+    }
 
-    const charWidth = 6.5   // approx per char
+    const countText = formatNumber(count)
+
+    // 🔥 AUTO WIDTH
+    const charWidth = 6.5
     const padding = 10
 
-    const leftWidth = Math.ceil(text.length * charWidth) + padding
+    const leftWidth = Math.ceil(label.length * charWidth) + padding
     const rightWidth = Math.ceil(countText.length * charWidth) + padding
 
     const totalWidth = leftWidth + rightWidth
@@ -49,22 +54,31 @@ export default {
     const leftCenter = leftWidth / 2
     const rightCenter = leftWidth + (rightWidth / 2)
 
+    // ✨ STYLE
+    const gradient = `
+      <linearGradient id="b" x2="0" y2="100%">
+        <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+        <stop offset="1" stop-opacity=".1"/>
+      </linearGradient>
+    `
+
+    const overlay = `
+      <rect width="${totalWidth}" height="20" fill="url(#b)"/>
+    `
+
     // SVG
     const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20">
-  <linearGradient id="b" x2="0" y2="100%">
-    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
-    <stop offset="1" stop-opacity=".1"/>
-  </linearGradient>
+  ${gradient}
 
   <mask id="a">
     <rect width="${totalWidth}" height="20" rx="3" fill="#fff"/>
   </mask>
 
   <g mask="url(#a)">
-    <rect width="${leftWidth}" height="20" fill="#555"/>
-    <rect x="${leftWidth}" width="${rightWidth}" height="20" fill="#c60000ff"/>
-    <rect width="${totalWidth}" height="20" fill="url(#b)"/>
+    <rect width="${leftWidth}" height="20" fill="${labelColor}"/>
+    <rect x="${leftWidth}" width="${rightWidth}" height="20" fill="${color}"/>
+    ${overlay}
   </g>
 
   <g fill="#fff" text-anchor="middle"
@@ -72,8 +86,8 @@ export default {
      font-size="11">
 
     <!-- Label -->
-    <text x="${leftCenter}" y="15" fill="#010101" fill-opacity=".3">${text}</text>
-    <text x="${leftCenter}" y="14">${text}</text>
+    <text x="${leftCenter}" y="15" fill="#010101" fill-opacity=".3">${label}</text>
+    <text x="${leftCenter}" y="14">${label}</text>
 
     <!-- Count -->
     <text x="${rightCenter}" y="15" fill="#010101" fill-opacity=".3">${countText}</text>
@@ -85,9 +99,7 @@ export default {
     return new Response(svg, {
       headers: {
         "Content-Type": "image/svg+xml",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0"
+        "Cache-Control": "no-cache"
       }
     })
   }
