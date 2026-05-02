@@ -2,6 +2,25 @@ export default {
   async fetch(request, env) {
 
     const url = new URL(request.url)
+
+    // ✅ VERIFY ENDPOINT (put BEFORE using parts)
+    if (url.pathname === "/verify") {
+      return new Response(JSON.stringify({
+        name: "github-badge-api",
+        type: "counter",
+        version: "1.0",
+        endpoints: [
+          "/USERNAME",
+          "/USERNAME/REPO"
+        ],
+        status: "ok"
+      }), {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+    }
+
     const parts = url.pathname.split("/").filter(Boolean)
 
     if (parts.length < 1) {
@@ -45,7 +64,7 @@ export default {
 
     const countText = formatNumber(count)
 
-    // 📏 Dynamic width (depends on font size too)
+    // 📏 Dynamic width
     const charWidth = fontSize * 0.6
     const padding = fontSize
 
@@ -57,7 +76,7 @@ export default {
     const leftCenter = leftWidth / 2
     const rightCenter = leftWidth + (rightWidth / 2)
 
-    const textY = 14 + (fontSize - 11) // adjust vertical alignment
+    const textY = 14 + (fontSize - 11)
 
     // SVG
     const svg = `
@@ -81,11 +100,9 @@ export default {
      font-family="DejaVu Sans,Verdana,Geneva,sans-serif"
      font-size="${fontSize}">
 
-    <!-- Label -->
     <text x="${leftCenter}" y="${textY+1}" fill="#000" fill-opacity=".3">${label}</text>
     <text x="${leftCenter}" y="${textY}" fill="${textColor}">${label}</text>
 
-    <!-- Count -->
     <text x="${rightCenter}" y="${textY+1}" fill="#000" fill-opacity=".3">${countText}</text>
     <text x="${rightCenter}" y="${textY}" fill="${countColor}">${countText}</text>
   </g>
